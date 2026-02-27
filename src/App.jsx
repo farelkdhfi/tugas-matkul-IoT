@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { OrbitControls, Environment, Box, Cylinder, Text, useGLTF, Torus } from '@react-three/drei';
+import { OrbitControls, Environment, Box, Cylinder, Text, useGLTF, Torus, useProgress } from '@react-three/drei';
 import * as THREE from 'three';
 import {
   ShieldAlert, ShieldCheck, Fan, DoorOpen, DoorClosed,
@@ -176,6 +176,9 @@ const RoomSimulation = ({ isEmergency, doorOpen, windowOpen, fanOn }) => {
 // 2. MAIN DASHBOARD COMPONENT
 // ==========================================
 export default function App() {
+  const { progress } = useProgress(); // Hook untuk melacak loading asset 3D
+  const [isLoading, setIsLoading] = useState(true);
+
   const [gasLevel, setGasLevel] = useState(5);
   const [isEmergency, setIsEmergency] = useState(false);
   const [doorOpen, setDoorOpen] = useState(true);
@@ -187,6 +190,16 @@ export default function App() {
 
   const audioCtxRef = useRef(null);
   const intervalRef = useRef(null);
+
+  // Efek untuk menyembunyikan loading screen ketika progress 100%
+  useEffect(() => {
+    if (progress === 100) {
+      const timer = setTimeout(() => {
+        setIsLoading(false);
+      }, 600); // Jeda transisi halus 600ms
+      return () => clearTimeout(timer);
+    }
+  }, [progress]);
 
   const playBuzzer = () => {
     if (!audioCtxRef.current) audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
@@ -244,6 +257,25 @@ export default function App() {
   return (
     <div className="relative w-screen h-screen overflow-hidden bg-[#202020] font-sans text-zinc-100 select-none">
 
+      {/* ================= LOADING SCREEN ================= */}
+      {isLoading && (
+        <div className="absolute inset-0 z-[9999] bg-[#111111] flex flex-col items-center justify-center pointer-events-auto">
+          <ShieldCheck className="w-16 h-16 md:w-20 md:h-20 text-cyan-400 mb-6 animate-pulse" />
+          <h1 className="text-lg md:text-xl font-semibold tracking-widest text-zinc-100 drop-shadow-md mb-4">
+            SMART OFFICE <span className="text-cyan-400">INITIALIZATION</span>
+          </h1>
+          <div className="w-64 md:w-80 h-1.5 bg-zinc-800 rounded-full overflow-hidden mb-2">
+            <div 
+              className="h-full bg-cyan-500 shadow-[0_0_10px_cyan] transition-all duration-300" 
+              style={{ width: `${progress}%` }} 
+            />
+          </div>
+          <p className="text-xs md:text-sm font-mono text-zinc-400">
+            LOADING ASSETS... {Math.round(progress)}%
+          </p>
+        </div>
+      )}
+
       {/* 3D CANVAS BACKGROUND */}
       <div className="absolute inset-0 z-0">
         <Canvas camera={{ position: [0, 2, 8], fov: 55 }}>
@@ -261,105 +293,107 @@ export default function App() {
         </Canvas>
       </div>
 
-      {/* OVERLAY UI (GLASSMORPHISM) */}
-      <div className="absolute inset-0 z-10 p-4 md:p-6 flex flex-col pointer-events-none">
+      {/* OVERLAY UI (GLASSMORPHISM) - Hanya dirender setelah loading selesai */}
+      {!isLoading && (
+        <div className="absolute inset-0 z-10 p-4 md:p-6 flex flex-col pointer-events-none">
 
-        {/* HEADER */}
-        <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 md:gap-0 rounded-2xl pointer-events-auto w-full">
-          <div className="flex items-center gap-3 md:gap-4">
-            <ShieldCheck className={`w-8 h-8 md:w-9 md:h-9 ${isEmergency ? 'text-red-500' : 'text-cyan-400'}`} />
-            <div>
-              <h1 className="text-lg md:text-xl font-semibold tracking-widest text-zinc-100 drop-shadow-md">
-                SMART OFFICE <span className={isEmergency ? 'text-red-500' : 'text-cyan-400'}>HAZMAT</span>
-              </h1>
-              <p className="text-[10px] md:text-xs text-zinc-300 font-mono mt-0.5">NODE: ESP32-ALPHA-01 | PROTOCOL: WEBSOCKET</p>
+          {/* HEADER */}
+          <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 md:gap-0 rounded-2xl pointer-events-auto w-full">
+            <div className="flex items-center gap-3 md:gap-4">
+              <ShieldCheck className={`w-8 h-8 md:w-9 md:h-9 ${isEmergency ? 'text-red-500' : 'text-cyan-400'}`} />
+              <div>
+                <h1 className="text-lg md:text-xl font-semibold tracking-widest text-zinc-100 drop-shadow-md">
+                  SMART OFFICE <span className={isEmergency ? 'text-red-500' : 'text-cyan-400'}>HAZMAT</span>
+                </h1>
+                <p className="text-[10px] md:text-xs text-zinc-300 font-mono mt-0.5">NODE: ESP32-ALPHA-01 | PROTOCOL: WEBSOCKET</p>
+              </div>
             </div>
-          </div>
-          <div className="flex items-center justify-between md:justify-start gap-3 bg-zinc-800/80 p-2 md:p-2.5 rounded-lg border border-zinc-600 hover:border-zinc-400 transition-colors w-full md:w-auto">
-            <div className="flex items-center gap-3">
-              <UserCircle className="w-5 h-5 text-zinc-300" />
-              <select
-                className="bg-transparent text-sm font-semibold text-zinc-100 outline-none cursor-pointer uppercase drop-shadow-md w-full"
-                value={currentRole}
-                onChange={(e) => setCurrentRole(e.target.value)}
+            <div className="flex items-center justify-between md:justify-start gap-3 bg-zinc-800/80 p-2 md:p-2.5 rounded-lg border border-zinc-600 hover:border-zinc-400 transition-colors w-full md:w-auto">
+              <div className="flex items-center gap-3">
+                <UserCircle className="w-5 h-5 text-zinc-300" />
+                <select
+                  className="bg-transparent text-sm font-semibold text-zinc-100 outline-none cursor-pointer uppercase drop-shadow-md w-full"
+                  value={currentRole}
+                  onChange={(e) => setCurrentRole(e.target.value)}
+                >
+                  {roles.map(r => <option key={r} value={r} className="bg-zinc-800">{r}</option>)}
+                </select>
+              </div>
+            </div>
+          </header>
+
+          {/* MAIN PANELS */}
+          <main className="flex-1 flex flex-col md:flex-row items-center md:items-end justify-end md:justify-between pb-0 md:pb-4 gap-4 md:gap-6 pointer-events-none relative mt-4 md:mt-0">
+
+            {/* PANEL KIRI: LIVE TELEMETRY */}
+            <div className="w-full max-w-sm md:max-w-none md:w-80 bg-zinc-950/80 backdrop-blur-xl border border-zinc-700 p-5 md:p-6 rounded-2xl shadow-2xl pointer-events-auto shrink-0 z-10">
+              <h2 className="text-xs font-semibold text-zinc-400 mb-4 md:mb-5 tracking-widest border-b border-zinc-700 pb-3">LIVE SENSOR TELEMETRY</h2>
+
+              <div className="mb-5 md:mb-6 bg-black/60 p-4 rounded-xl border border-zinc-700/50">
+                <div className="flex justify-between mb-3 items-center">
+                  <span className="flex items-center gap-2 text-sm font-semibold text-zinc-200"><Wind className="w-4 h-4 text-cyan-400" /> GAS LEVEL (MQ-2)</span>
+                  <span className={`font-mono font-semibold text-xl ${isEmergency ? 'text-red-500 animate-pulse' : 'text-cyan-400'}`}>{gasLevel}%</span>
+                </div>
+                <div className="h-1.5 w-full bg-zinc-800 rounded-full overflow-hidden">
+                  <div className={`h-full transition-all duration-500 ${isEmergency ? 'bg-red-500 shadow-[0_0_10px_red]' : 'bg-cyan-500 shadow-[0_0_10px_cyan]'}`} style={{ width: `${gasLevel}%` }} />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 mb-5 md:mb-6">
+                <div className={`p-4 rounded-xl flex flex-col items-center justify-center gap-2 border transition-colors duration-500 ${doorOpen ? 'bg-emerald-900/60 border-emerald-500/50 text-emerald-300' : 'bg-red-900/60 border-red-500/50 text-red-300'}`}>
+                  {doorOpen ? <DoorOpen className="w-7 h-7" /> : <DoorClosed className="w-7 h-7" />}
+                  <span className="text-[10px] tracking-wider font-semibold text-center">{doorOpen ? 'PINTU TERBUKA' : 'PINTU TERKUNCI'}</span>
+                </div>
+                <div className={`p-4 rounded-xl flex flex-col items-center justify-center gap-2 border transition-colors duration-500 ${windowOpen ? 'bg-amber-900/60 border-amber-500/50 text-amber-300' : 'bg-zinc-800/80 border-zinc-600 text-zinc-400'}`}>
+                  <Maximize2 className={`w-7 h-7 transition-transform ${windowOpen ? 'scale-110' : ''}`} />
+                  <span className="text-[10px] tracking-wider font-semibold text-center">{windowOpen ? 'VENTILASI BUKA' : 'VENTILASI TUTUP'}</span>
+                </div>
+                <div className={`col-span-2 p-4 rounded-xl flex items-center justify-center gap-4 border transition-colors duration-500 ${fanOn ? 'bg-cyan-900/60 border-cyan-500/50 text-cyan-300' : 'bg-zinc-800/80 border-zinc-600 text-zinc-400'}`}>
+                  <Fan className={`w-8 h-8 ${fanOn ? 'animate-spin' : ''}`} style={{ animationDuration: '0.5s' }} />
+                  <div className="flex flex-col">
+                    <span className="text-[11px] tracking-widest font-semibold">EXHAUST FAN</span>
+                    <span className="text-[11px] md:text-xs font-mono">{fanOn ? 'ACTIVE (12V RELAY)' : 'STANDBY'}</span>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                onClick={triggerGasLeak}
+                className={`w-full py-3.5 md:py-4 rounded-xl text-sm md:text-base font-semibold tracking-widest flex items-center justify-center gap-3 transition-all ${isEmergency ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed border border-zinc-700' : 'bg-red-600 hover:bg-red-500 text-white shadow-[0_0_20px_rgba(220,38,38,0.6)] active:scale-95'}`}
               >
-                {roles.map(r => <option key={r} value={r} className="bg-zinc-800">{r}</option>)}
-              </select>
-            </div>
-          </div>
-        </header>
-
-        {/* MAIN PANELS */}
-        <main className="flex-1 flex flex-col md:flex-row items-center md:items-end justify-end md:justify-between pb-0 md:pb-4 gap-4 md:gap-6 pointer-events-none relative mt-4 md:mt-0">
-
-          {/* PANEL KIRI: LIVE TELEMETRY */}
-          <div className="w-full max-w-sm md:max-w-none md:w-80 bg-zinc-950/80 backdrop-blur-xl border border-zinc-700 p-5 md:p-6 rounded-2xl shadow-2xl pointer-events-auto shrink-0 z-10">
-            <h2 className="text-xs font-semibold text-zinc-400 mb-4 md:mb-5 tracking-widest border-b border-zinc-700 pb-3">LIVE SENSOR TELEMETRY</h2>
-
-            <div className="mb-5 md:mb-6 bg-black/60 p-4 rounded-xl border border-zinc-700/50">
-              <div className="flex justify-between mb-3 items-center">
-                <span className="flex items-center gap-2 text-sm font-semibold text-zinc-200"><Wind className="w-4 h-4 text-cyan-400" /> GAS LEVEL (MQ-2)</span>
-                <span className={`font-mono font-semibold text-xl ${isEmergency ? 'text-red-500 animate-pulse' : 'text-cyan-400'}`}>{gasLevel}%</span>
-              </div>
-              <div className="h-1.5 w-full bg-zinc-800 rounded-full overflow-hidden">
-                <div className={`h-full transition-all duration-500 ${isEmergency ? 'bg-red-500 shadow-[0_0_10px_red]' : 'bg-cyan-500 shadow-[0_0_10px_cyan]'}`} style={{ width: `${gasLevel}%` }} />
-              </div>
+                <AlertTriangle className="w-4 h-4 md:w-5 md:h-5" /> {isEmergency ? 'HAZARD ACTIVE' : 'TEST TRIGGER LEAK'}
+              </button>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 mb-5 md:mb-6">
-              <div className={`p-4 rounded-xl flex flex-col items-center justify-center gap-2 border transition-colors duration-500 ${doorOpen ? 'bg-emerald-900/60 border-emerald-500/50 text-emerald-300' : 'bg-red-900/60 border-red-500/50 text-red-300'}`}>
-                {doorOpen ? <DoorOpen className="w-7 h-7" /> : <DoorClosed className="w-7 h-7" />}
-                <span className="text-[10px] tracking-wider font-semibold text-center">{doorOpen ? 'PINTU TERBUKA' : 'PINTU TERKUNCI'}</span>
-              </div>
-              <div className={`p-4 rounded-xl flex flex-col items-center justify-center gap-2 border transition-colors duration-500 ${windowOpen ? 'bg-amber-900/60 border-amber-500/50 text-amber-300' : 'bg-zinc-800/80 border-zinc-600 text-zinc-400'}`}>
-                <Maximize2 className={`w-7 h-7 transition-transform ${windowOpen ? 'scale-110' : ''}`} />
-                <span className="text-[10px] tracking-wider font-semibold text-center">{windowOpen ? 'VENTILASI BUKA' : 'VENTILASI TUTUP'}</span>
-              </div>
-              <div className={`col-span-2 p-4 rounded-xl flex items-center justify-center gap-4 border transition-colors duration-500 ${fanOn ? 'bg-cyan-900/60 border-cyan-500/50 text-cyan-300' : 'bg-zinc-800/80 border-zinc-600 text-zinc-400'}`}>
-                <Fan className={`w-8 h-8 ${fanOn ? 'animate-spin' : ''}`} style={{ animationDuration: '0.5s' }} />
-                <div className="flex flex-col">
-                  <span className="text-[11px] tracking-widest font-semibold">EXHAUST FAN</span>
-                  <span className="text-[11px] md:text-xs font-mono">{fanOn ? 'ACTIVE (12V RELAY)' : 'STANDBY'}</span>
-                </div>
+            {/* PANEL KANAN: EMERGENCY OVERRIDE */}
+            <div className={`w-full max-w-sm md:max-w-none md:w-96 p-6 md:p-8 rounded-3xl backdrop-blur-2xl border transition-all duration-700 absolute md:relative bottom-4 md:bottom-auto self-center md:self-auto z-50 pointer-events-auto ${isEmergency ? 'bg-red-950/90 border-red-500/70 shadow-[0_0_80px_rgba(220,38,38,0.6)] translate-y-0 opacity-100' : 'translate-y-10 opacity-0 pointer-events-none'}`}>
+              <div className="flex flex-col items-center text-center">
+                <ShieldAlert className="w-20 h-20 md:w-24 md:h-24 text-red-500 mb-5 md:mb-6 animate-pulse drop-shadow-lg" />
+                <h2 className="text-3xl md:text-4xl font-semibold tracking-widest text-red-500 mb-2 drop-shadow-md">LOCKDOWN</h2>
+                <p className="text-red-200 text-xs md:text-sm mb-6 md:mb-8 font-semibold tracking-wide">PROTOKOL EVAKUASI DIAKTIFKAN. RUANGAN DIISOLASI.</p>
+
+                {(currentRole === 'admin' || currentRole === 'head of office') ? (
+                  <div className="w-full">
+                    <p className="text-[10px] md:text-xs text-red-300 mb-3 font-mono bg-red-900/80 py-1.5 rounded font-semibold">AUTH: {currentRole.toUpperCase()} DETECTED</p>
+                    <button
+                      onClick={systemOverride}
+                      className="w-full bg-red-600 hover:bg-red-500 text-white text-sm md:text-base font-semibold tracking-widest py-4 md:py-5 rounded-xl shadow-[0_0_30px_rgba(220,38,38,0.8)] flex items-center justify-center gap-3 transition-transform active:scale-95 border border-red-400"
+                    >
+                      <Power className="w-5 h-5 md:w-6 md:h-6" /> SYSTEM OVERRIDE
+                    </button>
+                  </div>
+                ) : (
+                  <div className="w-full bg-black/80 p-4 md:p-5 rounded-xl border border-red-700/80">
+                    <p className="text-lg md:text-xl font-semibold text-zinc-300 mb-1 tracking-widest">AKSES DITOLAK</p>
+                    <p className="text-[10px] md:text-xs text-zinc-400 font-mono mt-2 leading-relaxed">Otorisasi <span className="text-red-400 font-semibold">'{currentRole}'</span> tidak mencukupi untuk intervensi sistem keamanan.</p>
+                  </div>
+                )}
               </div>
             </div>
 
-            <button
-              onClick={triggerGasLeak}
-              className={`w-full py-3.5 md:py-4 rounded-xl text-sm md:text-base font-semibold tracking-widest flex items-center justify-center gap-3 transition-all ${isEmergency ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed border border-zinc-700' : 'bg-red-600 hover:bg-red-500 text-white shadow-[0_0_20px_rgba(220,38,38,0.6)] active:scale-95'}`}
-            >
-              <AlertTriangle className="w-4 h-4 md:w-5 md:h-5" /> {isEmergency ? 'HAZARD ACTIVE' : 'TEST TRIGGER LEAK'}
-            </button>
-          </div>
-
-          {/* PANEL KANAN: EMERGENCY OVERRIDE */}
-          <div className={`w-full max-w-sm md:max-w-none md:w-96 p-6 md:p-8 rounded-3xl backdrop-blur-2xl border transition-all duration-700 absolute md:relative bottom-4 md:bottom-auto self-center md:self-auto z-50 pointer-events-auto ${isEmergency ? 'bg-red-950/90 border-red-500/70 shadow-[0_0_80px_rgba(220,38,38,0.6)] translate-y-0 opacity-100' : 'translate-y-10 opacity-0 pointer-events-none'}`}>
-            <div className="flex flex-col items-center text-center">
-              <ShieldAlert className="w-20 h-20 md:w-24 md:h-24 text-red-500 mb-5 md:mb-6 animate-pulse drop-shadow-lg" />
-              <h2 className="text-3xl md:text-4xl font-semibold tracking-widest text-red-500 mb-2 drop-shadow-md">LOCKDOWN</h2>
-              <p className="text-red-200 text-xs md:text-sm mb-6 md:mb-8 font-semibold tracking-wide">PROTOKOL EVAKUASI DIAKTIFKAN. RUANGAN DIISOLASI.</p>
-
-              {(currentRole === 'admin' || currentRole === 'head of office') ? (
-                <div className="w-full">
-                  <p className="text-[10px] md:text-xs text-red-300 mb-3 font-mono bg-red-900/80 py-1.5 rounded font-semibold">AUTH: {currentRole.toUpperCase()} DETECTED</p>
-                  <button
-                    onClick={systemOverride}
-                    className="w-full bg-red-600 hover:bg-red-500 text-white text-sm md:text-base font-semibold tracking-widest py-4 md:py-5 rounded-xl shadow-[0_0_30px_rgba(220,38,38,0.8)] flex items-center justify-center gap-3 transition-transform active:scale-95 border border-red-400"
-                  >
-                    <Power className="w-5 h-5 md:w-6 md:h-6" /> SYSTEM OVERRIDE
-                  </button>
-                </div>
-              ) : (
-                <div className="w-full bg-black/80 p-4 md:p-5 rounded-xl border border-red-700/80">
-                  <p className="text-lg md:text-xl font-semibold text-zinc-300 mb-1 tracking-widest">AKSES DITOLAK</p>
-                  <p className="text-[10px] md:text-xs text-zinc-400 font-mono mt-2 leading-relaxed">Otorisasi <span className="text-red-400 font-semibold">'{currentRole}'</span> tidak mencukupi untuk intervensi sistem keamanan.</p>
-                </div>
-              )}
-            </div>
-          </div>
-
-        </main>
-      </div>
+          </main>
+        </div>
+      )}
     </div>
   );
 }
