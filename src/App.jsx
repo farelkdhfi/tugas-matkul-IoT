@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, Environment, Box, Cylinder, Text, useGLTF, Torus, useProgress } from '@react-three/drei';
 import * as THREE from 'three';
@@ -6,6 +6,101 @@ import {
   ShieldAlert, ShieldCheck, Fan, DoorOpen, DoorClosed,
   Wind, AlertTriangle, Power, UserCircle, Maximize2
 } from 'lucide-react';
+
+// ==========================================
+// 0. KOMPONEN SIMULASI PARTIKEL GAS (BARU)
+// ==========================================
+const GasSimulation = ({ isEmergency, fanOn }) => {
+  const count = 250; // Jumlah partikel gas
+  const meshRef = useRef();
+  const dummy = useMemo(() => new THREE.Object3D(), []);
+  
+  // Inisialisasi posisi dan kecepatan acak untuk setiap partikel
+  const particles = useMemo(() => {
+    return Array.from({ length: count }, () => ({
+      pos: new THREE.Vector3(
+        (Math.random() - 0.5) * 10, 
+        Math.random() * 5, 
+        (Math.random() - 0.5) * 6 - 2
+      ),
+      speed: Math.random() * 0.02 + 0.01,
+      drift: new THREE.Vector3(
+        (Math.random() - 0.5) * 0.02, 
+        (Math.random() * 0.02) + 0.01, 
+        (Math.random() - 0.5) * 0.02
+      ),
+      scale: 0
+    }));
+  }, [count]);
+
+  useFrame((state, delta) => {
+    if (!meshRef.current) return;
+    
+    // Posisi exhaust fan sebagai titik pusat hisapan
+    const fanPos = new THREE.Vector3(0, 4.5, -4.6);
+    
+    particles.forEach((p, i) => {
+      // Skala target: Muncul jika emergency, menghilang jika aman
+      const targetScale = isEmergency ? (Math.random() * 0.6 + 0.4) : 0;
+      p.scale = THREE.MathUtils.lerp(p.scale, targetScale, delta * 3);
+
+      if (isEmergency) {
+        if (fanOn) {
+          // LOGIC TERHISAP EXHAUST FAN
+          const dir = new THREE.Vector3().subVectors(fanPos, p.pos).normalize();
+          const dist = p.pos.distanceTo(fanPos);
+          
+          // Semakin dekat dengan kipas, daya hisap semakin kuat
+          const suctionForce = Math.max(0.5, 4 / (dist + 1)); 
+          p.pos.add(dir.multiplyScalar(p.speed * suctionForce * delta * 70));
+          
+          // Jika partikel sudah mencapai kipas, respawn (kembali) ke lantai
+          if (dist < 1.0) {
+            p.pos.set(
+              (Math.random() - 0.5) * 10, 
+              -0.2, 
+              (Math.random() - 0.5) * 6 - 2
+            );
+            p.scale = 0; // Reset ukuran agar muncul secara perlahan
+          }
+        } else {
+          // LOGIC MENGAMBANG ALAMI (Jika kipas mati)
+          p.pos.add(new THREE.Vector3(p.drift.x, p.drift.y * delta * 60, p.drift.z));
+          
+          // Batasan agar gas tidak keluar ruangan (Bounce effect)
+          if (p.pos.y > 5) p.pos.y = -0.2;
+          if (p.pos.x > 5 || p.pos.x < -5) p.drift.x *= -1;
+          if (p.pos.z > 2 || p.pos.z < -5) p.drift.z *= -1;
+        }
+      }
+
+      // Update posisi dummy object
+      dummy.position.copy(p.pos);
+      
+      // Efek denyut (pulsing) agar gas terlihat lebih organik
+      const pulse = Math.sin(state.clock.elapsedTime * 3 + i) * 0.2 + 1;
+      dummy.scale.setScalar(p.scale * pulse);
+      dummy.updateMatrix();
+      meshRef.current.setMatrixAt(i, dummy.matrix);
+    });
+    
+    meshRef.current.instanceMatrix.needsUpdate = true;
+  });
+
+  return (
+    <instancedMesh ref={meshRef} args={[null, null, count]}>
+      <sphereGeometry args={[0.4, 16, 16]} />
+      {/* Material gas beracun (Hijau keabu-abuan transparan) */}
+      <meshStandardMaterial 
+        color="#a8ffcc" 
+        transparent 
+        opacity={0.15} 
+        roughness={1} 
+        depthWrite={false} // Mencegah glitch visual (z-fighting) antar partikel
+      />
+    </instancedMesh>
+  );
+};
 
 // ==========================================
 // 1. KOMPONEN 3D (SIMULASI RUANGAN FISIK)
@@ -56,6 +151,9 @@ const RoomSimulation = ({ isEmergency, doorOpen, windowOpen, fanOn }) => {
 
   return (
     <group position={[0, -2, 0]}>
+      {/* ================= SIMULASI GAS (BARU) ================= */}
+      <GasSimulation isEmergency={isEmergency} fanOn={fanOn} />
+
       {/* ================= PENCAHAYAAN ================= */}
       <ambientLight intensity={isEmergency ? 0.4 : 1.2} />
       <directionalLight position={[5, 10, 5]} intensity={isEmergency ? 0.2 : 1.5} color="#ffffff" />
